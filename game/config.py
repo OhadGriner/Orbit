@@ -10,8 +10,3 @@ TARGET_RADIUS = 50                          # pixels — controls image size & h
 BONUS_APPEAR_AFTER = 10.0   # seconds of play before first bonus image appears
 BONUS_POINTS = 30            # points awarded per correct answer
 
-# Each entry: (image filename inside assets/bonus/, correct answer string)
-BONUS_ITEMS = [
-    ("cat.png",  "cat"),
-    ("dog.png",  "dog"),
-]

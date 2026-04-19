@@ -1,7 +1,8 @@
 import math
+from pathlib import Path
 from typing import List, Tuple
 
-from ..config import ASSETS_DIR, BONUS_APPEAR_AFTER, BONUS_ITEMS, BONUS_POINTS, TARGET_RADIUS
+from ..config import ASSETS_DIR, BONUS_APPEAR_AFTER, BONUS_POINTS, TARGET_RADIUS
 from ..gaze_providers.base import GazeProvider
 from .state import GamePhase, GameState, Target
 
@@ -21,9 +22,11 @@ class GameEngine:
         self._ax = self._cx * _AMPLITUDE_FRACTION
         self._ay = self._cy * _AMPLITUDE_FRACTION
 
+        bonus_dir = ASSETS_DIR / "bonus"
         self._bonus_items: List[Tuple[str, str]] = [
-            (str(ASSETS_DIR / "bonus" / img), answer)
-            for img, answer in BONUS_ITEMS
+            (str(f), f.stem)
+            for f in sorted(bonus_dir.iterdir())
+            if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")
         ]
 
         self._t = 0.0
