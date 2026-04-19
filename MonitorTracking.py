@@ -70,15 +70,18 @@ def landmark_to_np(landmark, w, h):
 threading.Thread(target=mouse_mover, daemon=True).start()
 
 while cap.isOpened():
+    print("Processing frame...")
     ret, frame = cap.read()
     if not ret:
+        print("Failed to capture frame. Exiting.")
         break
 
     h, w, _ = frame.shape
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(rgb)
-
+    print("Frame processed.")
     if results.multi_face_landmarks:
+        print("Face detected.")
         face_landmarks = results.multi_face_landmarks[0].landmark
         landmarks_frame = np.zeros_like(frame)  # Blank black frame
 
@@ -255,7 +258,10 @@ while cap.isOpened():
         cv2.line(landmarks_frame, project(avg_origin), project(ray_end), (15, 255, 0), 3)
 
     cv2.imshow("Head-Aligned Cube", frame)
-    cv2.imshow("Facial Landmarks", landmarks_frame)
+    try:
+        cv2.imshow("Facial Landmarks", landmarks_frame)
+    except NameError:
+        print("No landmarks frame to display.")
 
     if keyboard.is_pressed('f7'):
         mouse_control_enabled = not mouse_control_enabled
