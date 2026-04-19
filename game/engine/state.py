@@ -22,7 +22,7 @@ class GameState:
     countdown: float = 3.0
     gaze_x: int = 0
     gaze_y: int = 0
-    gaze_radius: int = 20
+    gaze_radius: int = 150
     score: int = 0
     tracking: bool = False
     screen_width: int = 1920

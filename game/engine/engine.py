@@ -4,8 +4,8 @@ from ..gaze_providers.base import GazeProvider
 from .state import GamePhase, GameState, Target
 
 # Lissajous frequencies (rad/s). Irrational ratio keeps path from repeating quickly.
-_OMEGA_X = 0.7
-_OMEGA_Y = 0.5
+_OMEGA_X = 0.25
+_OMEGA_Y = 0.18
 
 # Fraction of half-screen used as amplitude (keeps target away from edges).
 _AMPLITUDE_FRACTION = 0.78
