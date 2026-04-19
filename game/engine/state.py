@@ -27,3 +27,7 @@ class GameState:
     tracking: bool = False
     screen_width: int = 1920
     screen_height: int = 1080
+    # Bonus quiz
+    bonus_active: bool = False
+    bonus_image_path: str = ""
+    bonus_input: str = ""
