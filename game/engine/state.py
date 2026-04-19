@@ -3,6 +3,7 @@ from enum import Enum, auto
 
 
 class GamePhase(Enum):
+    WAITING = auto()
     COUNTDOWN = auto()
     PLAYING = auto()
     GAME_OVER = auto()

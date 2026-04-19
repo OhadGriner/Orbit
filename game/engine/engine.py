@@ -39,7 +39,7 @@ class GameEngine:
     def _initial_state(self) -> GameState:
         return GameState(
             target=Target(x=self._cx, y=self._cy, radius=TARGET_RADIUS),
-            phase=GamePhase.COUNTDOWN,
+            phase=GamePhase.WAITING,
             countdown=_COUNTDOWN_START,
             screen_width=self._screen_width,
             screen_height=self._screen_height,
@@ -90,7 +90,9 @@ class GameEngine:
     def update(self, dt: float) -> None:
         state = self._state
 
-        if state.phase == GamePhase.GAME_OVER:
+        if state.phase in (GamePhase.GAME_OVER, GamePhase.WAITING):
+            gx, gy = self._gaze.get_gaze_position()
+            state.gaze_x, state.gaze_y = gx, gy
             return
 
         gx, gy = self._gaze.get_gaze_position()
@@ -129,3 +131,6 @@ class GameEngine:
 
     def calibrate(self) -> None:
         self._gaze.calibrate()
+        if self._state.phase == GamePhase.WAITING:
+            self._state.phase = GamePhase.COUNTDOWN
+            self._state.countdown = _COUNTDOWN_START
