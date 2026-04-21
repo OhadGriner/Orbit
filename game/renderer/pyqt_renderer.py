@@ -243,10 +243,17 @@ class _GameWidget(QWidget):
         _spix = _QPixmap(str(ASSETS_DIR / "slide.png"))
         self._slide_pixmap = _spix if not _spix.isNull() else None
 
+        self._last_level: int = 0
+
         self._countdown_player = QMediaPlayer(self)
         self._countdown_player.setMedia(
             QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / "countdown.mp3")))
         )
+        self._level_stingers: dict = {}
+        for lvl in (1, 2, 3):
+            pl = QMediaPlayer(self)
+            pl.setMedia(QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / f"level-{lvl}.mp3"))))
+            self._level_stingers[lvl] = pl
         self._popping_player = QMediaPlayer(self)
         self._popping_player.setMedia(
             QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / "popping.mp3")))
@@ -320,6 +327,21 @@ class _GameWidget(QWidget):
         else:
             self._last_countdown_started = False
 
+        # Level stingers
+        new_level = state.level if state.phase in (GamePhase.COUNTDOWN, GamePhase.PLAYING) else 0
+        if new_level == 1 and self._last_level == 0 and state.phase == GamePhase.PLAYING:
+            self._level_stingers[1].stop()
+            self._level_stingers[1].play()
+            self._last_level = 1
+        elif new_level == 2 and self._last_level == 1:
+            self._level_stingers[2].stop()
+            self._level_stingers[2].play()
+            self._last_level = 2
+        elif new_level == 3 and self._last_level == 2:
+            self._level_stingers[3].stop()
+            self._level_stingers[3].play()
+            self._last_level = 3
+
         # New deliverable appeared
         if state.bonus_phrase != self._last_bonus_phrase and state.bonus_phrase:
             self._popup_sender_idx = random.randrange(len(_SENDERS))
@@ -375,6 +397,7 @@ class _GameWidget(QWidget):
             self._engine.reset()
             self._last_tick = time.perf_counter()
             self._last_bonus_phrase = ""
+            self._last_level = 0
             self._level_transition = 0.0
             self._level_transition_23 = 0.0
             self._inbox = list(_GMAIL_EMAILS[:2])
