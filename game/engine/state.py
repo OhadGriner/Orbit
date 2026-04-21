@@ -3,6 +3,7 @@ from enum import Enum, auto
 
 
 class GamePhase(Enum):
+    WELCOME = auto()
     WAITING = auto()
     COUNTDOWN = auto()
     PLAYING = auto()
@@ -28,7 +29,8 @@ class GameState:
     tracking: bool = False
     screen_width: int = 1920
     screen_height: int = 1080
-    # Bonus quiz
+    drift_pct: float = 0.0   # 0.0–1.0 danger level; drives vignette intensity
+    # Bonus deliverable
     bonus_active: bool = False
-    bonus_image_path: str = ""
+    bonus_phrase: str = ""   # corporate buzzword phrase to type back
     bonus_input: str = ""

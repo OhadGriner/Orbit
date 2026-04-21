@@ -1,8 +1,7 @@
 import math
-from pathlib import Path
-from typing import List, Tuple
+import random
 
-from ..config import ASSETS_DIR, BONUS_APPEAR_AFTER, BONUS_POINTS, TARGET_RADIUS
+from ..config import BONUS_APPEAR_AFTER, BONUS_POINTS, TARGET_RADIUS
 from ..gaze_providers.base import GazeProvider
 from .state import GamePhase, GameState, Target
 
@@ -10,6 +9,30 @@ _OMEGA_X = 0.25
 _OMEGA_Y = 0.18
 _AMPLITUDE_FRACTION = 0.78
 _COUNTDOWN_START = 3.0
+_LOOKAWAY_FIRE_S = 3.0  # seconds of continuous drift before termination
+
+_BUZZ_PHRASES = [
+    "Let's take this offline",
+    "Circle back on that",
+    "Move the needle",
+    "It is what it is",
+    "Per my last email",
+    "Synergy",
+    "Low-hanging fruit",
+    "Boil the ocean",
+    "Hard stop at 3",
+    "Let's put a pin in it",
+    "Bandwidth",
+    "Quick wins",
+    "Touch base",
+    "Going forward",
+    "Reach out",
+    "At the end of the day",
+    "Deep dive",
+    "Think outside the box",
+    "Game changer",
+    "Leverage our core competencies",
+]
 
 
 class GameEngine:
@@ -22,24 +45,18 @@ class GameEngine:
         self._ax = self._cx * _AMPLITUDE_FRACTION
         self._ay = self._cy * _AMPLITUDE_FRACTION
 
-        bonus_dir = ASSETS_DIR / "bonus"
-        self._bonus_items: List[Tuple[str, str]] = [
-            (str(f), f.stem)
-            for f in sorted(bonus_dir.iterdir())
-            if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")
-        ]
-
         self._t = 0.0
         self._elapsed = 0.0
         self._tracking_acc = 0.0
         self._bonus_score = 0
         self._bonus_index = 0
+        self._drift_s = 0.0
         self._state = self._initial_state()
 
     def _initial_state(self) -> GameState:
         return GameState(
             target=Target(x=self._cx, y=self._cy, radius=TARGET_RADIUS),
-            phase=GamePhase.WAITING,
+            phase=GamePhase.WELCOME,
             countdown=_COUNTDOWN_START,
             screen_width=self._screen_width,
             screen_height=self._screen_height,
@@ -55,9 +72,10 @@ class GameEngine:
         self._tracking_acc = 0.0
         self._bonus_score = 0
         self._bonus_index = 0
+        self._drift_s = 0.0
         self._state = self._initial_state()
 
-    # ── Bonus input handling (called by renderer on keypresses) ──────────────
+    # ── Bonus input (called by renderer on keypresses) ────────────────────
 
     def handle_char(self, c: str) -> None:
         if self._state.bonus_active and self._state.phase == GamePhase.PLAYING:
@@ -71,26 +89,27 @@ class GameEngine:
         state = self._state
         if not state.bonus_active or state.phase != GamePhase.PLAYING:
             return
-        if not self._bonus_items:
-            return
-        _, answer = self._bonus_items[self._bonus_index]
-        if state.bonus_input.strip().lower() == answer.lower():
+        if state.bonus_input.strip().lower() == state.bonus_phrase.lower():
             self._bonus_score += BONUS_POINTS
             state.score = int(self._tracking_acc) + self._bonus_score
-            self._next_bonus()
+            self._next_phrase()
         state.bonus_input = ""
 
-    def _next_bonus(self) -> None:
-        self._bonus_index = (self._bonus_index + 1) % len(self._bonus_items)
-        path, _ = self._bonus_items[self._bonus_index]
-        self._state.bonus_image_path = path
+    def _next_phrase(self) -> None:
+        self._bonus_index = (self._bonus_index + 1) % len(_BUZZ_PHRASES)
+        self._state.bonus_phrase = _BUZZ_PHRASES[self._bonus_index]
 
-    # ── Main update loop ─────────────────────────────────────────────────────
+    # ── Main update loop ──────────────────────────────────────────────────
 
     def update(self, dt: float) -> None:
         state = self._state
 
-        if state.phase in (GamePhase.GAME_OVER, GamePhase.WAITING):
+        if state.phase in (GamePhase.WELCOME, GamePhase.GAME_OVER):
+            gx, gy = self._gaze.get_gaze_position()
+            state.gaze_x, state.gaze_y = gx, gy
+            return
+
+        if state.phase == GamePhase.WAITING:
             gx, gy = self._gaze.get_gaze_position()
             state.gaze_x, state.gaze_y = gx, gy
             return
@@ -102,7 +121,6 @@ class GameEngine:
             state.countdown -= dt
             if state.countdown <= 0:
                 state.phase = GamePhase.PLAYING
-                self._t = 0.0
             return
 
         # PLAYING
@@ -114,23 +132,36 @@ class GameEngine:
 
         dist = math.hypot(gx - state.target.x, gy - state.target.y)
         state.tracking = dist <= state.target.radius + state.gaze_radius
+
         if state.tracking:
+            self._drift_s = max(0.0, self._drift_s - dt * 2)
             self._tracking_acc += dt
             state.score = int(self._tracking_acc) + self._bonus_score
         else:
-            state.phase = GamePhase.GAME_OVER
-            return
+            self._drift_s += dt
+            if self._drift_s >= _LOOKAWAY_FIRE_S:
+                state.phase = GamePhase.GAME_OVER
+                state.drift_pct = 1.0
+                return
 
-        # Activate bonus after threshold
+        state.drift_pct = min(1.0, self._drift_s / _LOOKAWAY_FIRE_S)
+
         if (not state.bonus_active
                 and self._elapsed >= BONUS_APPEAR_AFTER
-                and self._bonus_items):
+                and _BUZZ_PHRASES):
             state.bonus_active = True
-            path, _ = self._bonus_items[self._bonus_index]
-            state.bonus_image_path = path
+            self._bonus_index = random.randrange(len(_BUZZ_PHRASES))
+            state.bonus_phrase = _BUZZ_PHRASES[self._bonus_index]
+
+    def click_start(self) -> None:
+        if self._state.phase == GamePhase.WELCOME:
+            self._state.phase = GamePhase.WAITING
 
     def calibrate(self) -> None:
         self._gaze.calibrate()
         if self._state.phase == GamePhase.WAITING:
+            self._t = 0.0  # target begins at screen centre (sin(0) = 0)
+            self._state.target.x = self._cx
+            self._state.target.y = self._cy
             self._state.phase = GamePhase.COUNTDOWN
             self._state.countdown = _COUNTDOWN_START
