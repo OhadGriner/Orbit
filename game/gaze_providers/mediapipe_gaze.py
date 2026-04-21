@@ -10,9 +10,9 @@ import pyautogui
 
 from .base import GazeProvider
 
-_FILTER_LENGTH = 8
-_YAW_DEGREES = 20
-_PITCH_DEGREES = 10
+_FILTER_LENGTH = 16
+_YAW_DEGREES = 35
+_PITCH_DEGREES = 18
 _LANDMARKS = {"left": 234, "right": 454, "top": 10, "bottom": 152, "front": 1}
 
 
