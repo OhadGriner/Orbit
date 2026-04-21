@@ -30,6 +30,7 @@ class GameState:
     screen_width: int = 1920
     screen_height: int = 1080
     drift_pct: float = 0.0   # 0.0–1.0 danger level; drives vignette intensity
+    level: int = 1           # 1 = spreadsheet, 2 = Gmail
     # Bonus deliverable
     bonus_active: bool = False
     bonus_phrase: str = ""   # corporate buzzword phrase to type back

@@ -83,6 +83,35 @@ _SENDERS = [
     ("Ingrid Tattersall",  "IT", QColor(201, 106,  45)),
 ]
 
+# ── Gmail palette & data ──────────────────────────────────────────────────────
+_G_BG       = QColor(246, 248, 252)
+_G_BLUE     = QColor(26,  115, 232)
+_G_RED      = QColor(234,  67,  53)
+_G_GREY     = QColor(95,   99, 104)
+_G_GREY_L   = QColor(218, 220, 224)
+_G_INK      = QColor(32,   33,  36)
+_G_ROW_UNREAD = QColor(255, 255, 255)
+_G_ROW_READ   = QColor(242, 245, 253)
+_G_SIDEBAR_W  = 256
+_G_TOPBAR_H   = 64
+_G_TAB_H      = 48
+_G_ROW_H      = 52
+
+_GMAIL_EMAILS = [
+    ("Chadley Ashworth", "Re: Q3 Synergy Deliverables",   "Just circling back — are we aligned on this?",                "4:47 PM",   True),
+    ("The Algorithm",    "URGENT: Gaze deviation",        "Your attention metrics have fallen below tolerance...",        "4:43 PM",   True),
+    ("Brinleigh Okafor", "OKR Rollup v3 FINAL (2)",       "Per my last email, please find the updated rollup attached",   "3:22 PM",   True),
+    ("Piotr Van Halen",  "Quick sync?",                   "Do you have 5 minutes? Hard stop at 3.",                      "2:15 PM",   False),
+    ("HR Department",    "Performance Review Q3",         "Your assessment results are ready. Band: Needs Improvement",   "11:30 AM",  True),
+    ("Rhiannon Chen",    "North Star Alignment deck",     "Moving the needle on this — thoughts before EOD?",            "10:14 AM",  False),
+    ("Devonte Kovacs",   "Bandwidth check",               "Wanted to touch base re: your bandwidth for Q4",              "9:47 AM",   False),
+    ("Agnetha Silveira", "Synergy Capture Framework",     "Low-hanging fruit identified. Let's put a pin in it.",        "Yesterday", False),
+    ("Google Calendar",  "Reminder: Mandatory offsite",   "All-hands Alignment offsite tomorrow 9:00 AM — non-optional", "Yesterday", False),
+    ("Marcus Brumble",   "Re: Re: Re: Deep dive",         "At the end of the day, it is what it is.",                   "Mon",       False),
+    ("Ingrid Tattersall","Moving forward",                "Following up on our previous circle-back. Shall we?",         "Mon",       False),
+    ("Reggie van Putten","Core competencies leverage",    "Game changer attached. Think outside the box on this one.",   "Sun",       False),
+]
+
 _HR_VERDICTS = [
     ("Meets Expectations",
      "Competent but unremarkable. Your manager will acknowledge this in writing, eventually, possibly."),
@@ -184,6 +213,11 @@ class _GameWidget(QWidget):
         self._last_bonus_phrase: str = ""
         self._popup_sender_idx: int = 0
         self._start_btn_rect: QRect = QRect()
+        self._level_transition: float = 0.0
+
+        from PyQt5.QtGui import QPixmap as _QPixmap
+        _pix = _QPixmap(str(ASSETS_DIR / "target.png"))
+        self._target_pixmap = _pix if not _pix.isNull() else None
 
         self._countdown_player = QMediaPlayer(self)
         self._countdown_player.setMedia(
@@ -219,6 +253,10 @@ class _GameWidget(QWidget):
         self._anim_t += dt
         self._engine.update(dt)
         state = self._engine.state
+
+        # Advance level transition (1.5 s crossfade)
+        if state.level == 2 and self._level_transition < 1.0:
+            self._level_transition = min(1.0, self._level_transition + dt / 1.5)
 
         if state.phase == GamePhase.COUNTDOWN:
             if not self._last_countdown_started:
@@ -267,6 +305,7 @@ class _GameWidget(QWidget):
             self._engine.reset()
             self._last_tick = time.perf_counter()
             self._last_bonus_phrase = ""
+            self._level_transition = 0.0
             self.setCursor(Qt.ArrowCursor)
 
     # ── Paint ─────────────────────────────────────────────────────────────
@@ -308,10 +347,22 @@ class _GameWidget(QWidget):
     # ── Background: spreadsheet ───────────────────────────────────────────
 
     def _draw_background(self, p: QPainter, w: int, h: int) -> None:
-        p.fillRect(0, 0, w, h, _C_CANVAS)
-        self._draw_sheet_chrome(p, w, h)
-        self._draw_sheet_grid(p, w, h)
-        self._draw_sheet_tabs(p, w, h)
+        tr = self._level_transition
+        # Level 1 background (spreadsheet)
+        if tr < 1.0:
+            p.save()
+            p.setOpacity(1.0 - tr)
+            p.fillRect(0, 0, w, h, _C_CANVAS)
+            self._draw_sheet_chrome(p, w, h)
+            self._draw_sheet_grid(p, w, h)
+            self._draw_sheet_tabs(p, w, h)
+            p.restore()
+        # Level 2 background (Gmail)
+        if tr > 0.0:
+            p.save()
+            p.setOpacity(tr)
+            self._draw_gmail_bg(p, w, h)
+            p.restore()
 
     def _draw_sheet_chrome(self, p: QPainter, w: int, h: int) -> None:
         # ── Title bar (y=0..44) ──────────────────────────────────────────
@@ -547,60 +598,259 @@ class _GameWidget(QWidget):
         p.drawText(QRect(w - 200, tab_y, 190, _TABS_H), Qt.AlignRight | Qt.AlignVCenter,
                    "847 rows  ·  autosaved 4m ago")
 
+    # ── Background: Gmail ────────────────────────────────────────────────
+
+    def _draw_gmail_bg(self, p: QPainter, w: int, h: int) -> None:
+        p.fillRect(0, 0, w, h, _G_BG)
+        self._draw_gmail_topbar(p, w)
+        self._draw_gmail_sidebar(p, h)
+        self._draw_gmail_emails(p, w, h)
+
+    def _draw_gmail_topbar(self, p: QPainter, w: int) -> None:
+        p.fillRect(0, 0, w, _G_TOPBAR_H, QColor(255, 255, 255))
+        p.setPen(QPen(_G_GREY_L, 1))
+        p.drawLine(0, _G_TOPBAR_H - 1, w, _G_TOPBAR_H - 1)
+
+        # Hamburger lines
+        p.setPen(QPen(_G_GREY, 2))
+        for i in range(3):
+            p.drawLine(18, 22 + i * 8, 38, 22 + i * 8)
+
+        # "Gmail" logo — G in red, rest grey
+        p.setFont(_font(20, bold=False))
+        p.setPen(_G_RED)
+        p.drawText(QRect(52, 0, 22, _G_TOPBAR_H), Qt.AlignLeft | Qt.AlignVCenter, "G")
+        p.setPen(_G_GREY)
+        p.drawText(QRect(74, 0, 56, _G_TOPBAR_H), Qt.AlignLeft | Qt.AlignVCenter, "mail")
+
+        # Search bar (centered)
+        sb_w = min(640, w - 480)
+        sb_x = (w - sb_w) // 2
+        sb_y = 12
+        sb_h = 40
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(QColor(232, 240, 254)))
+        p.drawRoundedRect(sb_x, sb_y, sb_w, sb_h, 20, 20)
+        p.setPen(QPen(_G_GREY, 2))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(sb_x + 14, sb_y + 11, 17, 17)
+        p.drawLine(sb_x + 29, sb_y + 27, sb_x + 36, sb_y + 34)
+        p.setPen(_G_GREY)
+        p.setFont(_font(13, bold=False))
+        p.drawText(QRect(sb_x + 46, sb_y, sb_w - 60, sb_h),
+                   Qt.AlignLeft | Qt.AlignVCenter, "Search mail")
+
+        # Right side: icons + avatar
+        rx = w - 168
+        p.setPen(_G_GREY)
+        p.setFont(_font(18, bold=False))
+        for icon in ["?", "⚙", "⊞"]:
+            p.drawText(QRect(rx, 0, 40, _G_TOPBAR_H), Qt.AlignCenter, icon)
+            rx += 44
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(_G_BLUE))
+        p.drawEllipse(rx + 4, 16, 30, 30)
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(_font(11, bold=True))
+        p.drawText(QRect(rx + 4, 16, 30, 30), Qt.AlignCenter, "KP")
+
+    def _draw_gmail_sidebar(self, p: QPainter, h: int) -> None:
+        p.fillRect(0, _G_TOPBAR_H, _G_SIDEBAR_W, h - _G_TOPBAR_H, QColor(255, 255, 255))
+
+        # Compose button
+        bx, by, bw2, bh2 = 16, _G_TOPBAR_H + 16, 144, 46
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(QColor(194, 231, 255)))
+        p.drawRoundedRect(bx, by, bw2, bh2, 16, 16)
+        p.setPen(QColor(0, 74, 119))
+        p.setFont(_font(13, bold=False))
+        p.drawText(QRect(bx + 14, by, bw2 - 14, bh2), Qt.AlignLeft | Qt.AlignVCenter, "✏  Compose")
+
+        nav = [("Inbox", "3", True), ("Starred", "", False), ("Snoozed", "", False),
+               ("Sent", "", False), ("Drafts", "1", False), ("More ▾", "", False)]
+        ny = by + bh2 + 16
+        for label, badge, selected in nav:
+            if selected:
+                p.setPen(Qt.NoPen)
+                p.setBrush(QBrush(QColor(210, 227, 252)))
+                p.drawRoundedRect(8, ny, _G_SIDEBAR_W - 16, 36, 18, 18)
+            p.setPen(_G_INK if selected else _G_GREY)
+            p.setFont(_font(13, bold=selected))
+            p.drawText(QRect(24, ny, 130, 36), Qt.AlignLeft | Qt.AlignVCenter, label)
+            if badge:
+                p.setPen(_G_INK)
+                p.setFont(_font(12, bold=True))
+                p.drawText(QRect(0, ny, _G_SIDEBAR_W - 20, 36),
+                           Qt.AlignRight | Qt.AlignVCenter, badge)
+            ny += 36
+
+    def _draw_gmail_emails(self, p: QPainter, w: int, h: int) -> None:
+        ex = _G_SIDEBAR_W
+
+        # Tab bar
+        tab_y = _G_TOPBAR_H
+        p.fillRect(ex, tab_y, w - ex, _G_TAB_H, QColor(255, 255, 255))
+        p.setPen(QPen(_G_GREY_L, 1))
+        p.drawLine(ex, tab_y + _G_TAB_H - 1, w, tab_y + _G_TAB_H - 1)
+
+        tx = ex + 16
+        for tab_name, active in [("Primary", True), ("Social", False), ("Promotions", False)]:
+            tab_w = 110
+            if active:
+                p.setPen(QPen(_G_BLUE, 3))
+                p.drawLine(tx, tab_y + _G_TAB_H - 3, tx + tab_w, tab_y + _G_TAB_H - 3)
+                p.setPen(_G_BLUE)
+            else:
+                p.setPen(_G_GREY)
+            p.setFont(_font(12, bold=active))
+            p.drawText(QRect(tx, tab_y, tab_w, _G_TAB_H), Qt.AlignCenter, tab_name)
+            tx += tab_w + 8
+
+        # Email rows
+        row_y = tab_y + _G_TAB_H
+        sender_col_w = 168
+        for sender, subject, snippet, date, unread in _GMAIL_EMAILS:
+            if row_y + _G_ROW_H > h:
+                break
+            p.fillRect(ex, row_y, w - ex, _G_ROW_H,
+                       _G_ROW_UNREAD if unread else _G_ROW_READ)
+            p.setPen(QPen(_G_GREY_L, 1))
+            p.drawLine(ex, row_y + _G_ROW_H - 1, w, row_y + _G_ROW_H - 1)
+
+            # Checkbox
+            p.setPen(QPen(_G_GREY_L, 1.5))
+            p.setBrush(Qt.NoBrush)
+            p.drawEllipse(ex + 14, row_y + (_G_ROW_H - 18) // 2, 18, 18)
+
+            # Star
+            p.setPen(_G_GREY_L)
+            p.setFont(_font(15, bold=False))
+            p.drawText(QRect(ex + 44, row_y, 22, _G_ROW_H), Qt.AlignCenter, "☆")
+
+            # Sender
+            p.setPen(_G_INK)
+            p.setFont(_font(12, bold=unread))
+            s = sender if len(sender) <= 16 else sender[:15] + "…"
+            p.drawText(QRect(ex + 76, row_y, sender_col_w, _G_ROW_H),
+                       Qt.AlignLeft | Qt.AlignVCenter, s)
+
+            # Subject + snippet on two lines
+            subj_x = ex + 76 + sender_col_w + 8
+            subj_w = w - subj_x - 88
+            mid_y = row_y + _G_ROW_H // 2
+            p.setFont(_font(12, bold=unread))
+            p.setPen(_G_INK)
+            p.drawText(QRect(subj_x, row_y + 6, subj_w, mid_y - row_y - 4),
+                       Qt.AlignLeft | Qt.AlignBottom, subject)
+            p.setFont(_font(11, bold=False))
+            p.setPen(_G_GREY)
+            p.drawText(QRect(subj_x, mid_y, subj_w, _G_ROW_H // 2 - 4),
+                       Qt.AlignLeft | Qt.AlignTop, snippet)
+
+            # Date
+            p.setFont(_font(11, bold=False))
+            p.setPen(_G_GREY)
+            p.drawText(QRect(w - 86, row_y, 78, _G_ROW_H),
+                       Qt.AlignRight | Qt.AlignVCenter, date)
+
+            # Unread dot
+            if unread:
+                p.setPen(Qt.NoPen)
+                p.setBrush(QBrush(_G_BLUE))
+                p.drawEllipse(w - 18, row_y + _G_ROW_H // 2 - 5, 10, 10)
+
+            row_y += _G_ROW_H
+
     # ── Target: moving cell selection ─────────────────────────────────────
 
     def _draw_target(self, p: QPainter, state: GameState, t: float) -> None:
         tx, ty = int(state.target.x), int(state.target.y)
-        tw, th = 120, 36   # selection rectangle size
+        tr = self._level_transition
 
-        if state.tracking:
-            # Glow pulse
-            phase = (t * 1.4) % 1.0
-            glow_r = int(6 + phase * 20)
-            alpha = int(180 * (1.0 - phase))
-            p.setPen(QPen(QColor(_C_SEL.red(), _C_SEL.green(), _C_SEL.blue(), alpha), 4))
-            p.setBrush(Qt.NoBrush)
-            p.drawRoundedRect(tx - tw // 2 - glow_r, ty - th // 2 - glow_r,
-                              tw + glow_r * 2, th + glow_r * 2, 4, 4)
+        # ── Level 1: spreadsheet cell-selection rectangle ─────────────────
+        if tr < 1.0:
+            p.save()
+            p.setOpacity(1.0 - tr)
+            tw, th = 120, 36
+            if state.tracking:
+                phase = (t * 1.4) % 1.0
+                glow_r = int(6 + phase * 20)
+                alpha = int(180 * (1.0 - phase))
+                p.setPen(QPen(QColor(_C_SEL.red(), _C_SEL.green(), _C_SEL.blue(), alpha), 4))
+                p.setBrush(Qt.NoBrush)
+                p.drawRoundedRect(tx - tw // 2 - glow_r, ty - th // 2 - glow_r,
+                                  tw + glow_r * 2, th + glow_r * 2, 4, 4)
+            sel_color = _C_BRAND if state.tracking else _C_SEL
+            p.setPen(QPen(sel_color, 2))
+            p.setBrush(QBrush(QColor(sel_color.red(), sel_color.green(), sel_color.blue(), 30)))
+            p.drawRect(tx - tw // 2, ty - th // 2, tw, th)
+            hs = 8
+            p.setPen(Qt.NoPen)
+            p.setBrush(QBrush(sel_color))
+            for hx2, hy2 in [(tx-tw//2, ty-th//2), (tx+tw//2-hs, ty-th//2),
+                             (tx-tw//2, ty+th//2-hs), (tx+tw//2-hs, ty+th//2-hs)]:
+                p.drawRect(hx2, hy2, hs, hs)
+            p.restore()
 
-        # Main selection box
-        sel_color = _C_BRAND if state.tracking else _C_SEL
-        p.setPen(QPen(sel_color, 2))
-        p.setBrush(QBrush(QColor(sel_color.red(), sel_color.green(), sel_color.blue(), 30)))
-        p.drawRect(tx - tw // 2, ty - th // 2, tw, th)
-
-        # Corner handles
-        hs = 8
-        corners = [
-            (tx - tw // 2, ty - th // 2),
-            (tx + tw // 2 - hs, ty - th // 2),
-            (tx - tw // 2, ty + th // 2 - hs),
-            (tx + tw // 2 - hs, ty + th // 2 - hs),
-        ]
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(sel_color))
-        for hx, hy in corners:
-            p.drawRect(hx, hy, hs, hs)
+        # ── Level 2: Google G logo PNG ────────────────────────────────────
+        if tr > 0.0 and self._target_pixmap:
+            p.save()
+            p.setOpacity(tr)
+            r = int(state.target.radius)
+            if state.tracking:
+                for i in range(2):
+                    phase = (t * 1.4 + i * 0.5) % 1.0
+                    ring_r = r + 6 + int(phase * 45)
+                    alpha = int(220 * (1.0 - phase))
+                    p.setPen(QPen(QColor(88, 204, 2, alpha), 3))
+                    p.setBrush(Qt.NoBrush)
+                    p.drawEllipse(tx - ring_r, ty - ring_r, ring_r * 2, ring_r * 2)
+            bounce = 1.0 + (0.05 * math.sin(t * 3.5) if state.tracking else 0.0)
+            p.translate(tx, ty)
+            p.scale(bounce, bounce)
+            size = r * 2
+            from PyQt5.QtCore import Qt as _Qt
+            scaled = self._target_pixmap.scaled(size, size, _Qt.KeepAspectRatio, _Qt.SmoothTransformation)
+            p.drawPixmap(-scaled.width() // 2, -scaled.height() // 2, scaled)
+            p.restore()
 
     # ── Gaze cursor: spreadsheet cell cursor ──────────────────────────────
 
     def _draw_gaze(self, p: QPainter, state: GameState, t: float) -> None:
         gx, gy = state.gaze_x, state.gaze_y
-        cw, ch = 72, 22
-
+        tr = self._level_transition
         dash_offset = (t * 35) % 16
-        pen = QPen(_C_SEL, 2)
-        pen.setStyle(Qt.DashLine)
-        pen.setDashOffset(dash_offset)
-        p.setPen(pen)
-        p.setBrush(QBrush(_C_SEL_A))
-        p.drawRect(gx - cw // 2, gy - ch // 2, cw, ch)
 
-        # Fill handle dot
-        fhs = 7
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(_C_SEL))
-        p.drawRect(gx + cw // 2 - fhs, gy + ch // 2 - fhs, fhs, fhs)
+        # ── Level 1: spreadsheet cell cursor ─────────────────────────────
+        if tr < 1.0:
+            p.save()
+            p.setOpacity(1.0 - tr)
+            cw, ch = 72, 22
+            pen = QPen(_C_SEL, 2)
+            pen.setStyle(Qt.DashLine)
+            pen.setDashOffset(dash_offset)
+            p.setPen(pen)
+            p.setBrush(QBrush(_C_SEL_A))
+            p.drawRect(gx - cw // 2, gy - ch // 2, cw, ch)
+            fhs = 7
+            p.setPen(Qt.NoPen)
+            p.setBrush(QBrush(_C_SEL))
+            p.drawRect(gx + cw // 2 - fhs, gy + ch // 2 - fhs, fhs, fhs)
+            p.restore()
+
+        # ── Level 2: dashed circle ────────────────────────────────────────
+        if tr > 0.0:
+            p.save()
+            p.setOpacity(tr)
+            gr = state.gaze_radius
+            color = _C_BRAND if state.tracking else _C_SEL
+            pen = QPen(QColor(color.red(), color.green(), color.blue(), 190), 2)
+            pen.setStyle(Qt.DashLine)
+            pen.setDashOffset(dash_offset)
+            p.setPen(pen)
+            p.setBrush(QBrush(QColor(color.red(), color.green(), color.blue(), 28)))
+            p.drawEllipse(gx - gr, gy - gr, gr * 2, gr * 2)
+            p.restore()
 
     # ── HUD ───────────────────────────────────────────────────────────────
 
