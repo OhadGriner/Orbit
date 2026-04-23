@@ -2,12 +2,10 @@ name: Build macOS App
 
 on:
   push:
-    tags:
-      - "v*"
 
 jobs:
   build:
-    runs-on: macos-13
+    runs-on: macos-14
 
     steps:
       - name: Checkout
