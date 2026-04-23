@@ -1,6 +1,9 @@
+import sys
 from pathlib import Path
 
-ASSETS_DIR = Path(__file__).parent.parent / "assets"
+# When frozen by PyInstaller, files are extracted to sys._MEIPASS
+_BASE = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).parent.parent
+ASSETS_DIR = _BASE / "assets"
 
 # ── Target (the moving object to follow) ────────────────────────────────────
 TARGET_IMAGE = ASSETS_DIR / "target.png"   # fallback to circle if file missing
