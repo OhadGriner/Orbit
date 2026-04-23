@@ -65,7 +65,7 @@ coll = COLLECT(
 
 app = BUNDLE(
     coll,
-    name="EyeTrackingGame.app",
+    name="Orbit.app",
     bundle_identifier="com.eyetracking.game",
     info_plist={
         "NSCameraUsageDescription": "This app uses the camera to track eye gaze.",

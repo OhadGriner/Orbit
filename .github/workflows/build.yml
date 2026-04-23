@@ -1,0 +1,38 @@
+name: Build macOS App
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Install PyInstaller
+        run: uv add --dev pyinstaller
+
+      - name: Build app
+        run: uv run pyinstaller main.spec --clean --noconfirm
+
+      - name: Zip app bundle
+        run: |
+          cd dist
+          mv Orbit.app Orbit-${{ github.ref_name }}.app
+          zip -r Orbit-${{ github.ref_name }}-mac.zip Orbit-${{ github.ref_name }}.app
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Orbit-${{ github.ref_name }}-mac.zip
+          generate_release_notes: true
