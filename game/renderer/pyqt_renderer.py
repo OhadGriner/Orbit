@@ -1911,7 +1911,10 @@ def _load_bundled_fonts() -> None:
 
 class PyQtRenderer(GameRenderer):
     def start(self, gaze_provider: GazeProvider) -> None:
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         app = QApplication(sys.argv)
+        app.setStyle("Fusion")
         _load_bundled_fonts()
         screen = app.primaryScreen().geometry()
         w, h = screen.width(), screen.height()
