@@ -251,37 +251,38 @@ class _GameWidget(QWidget):
         self._dev_d_pressed_at: Optional[float] = None
         self._dev_selected_level: int = 1
 
-        self._countdown_player = QMediaPlayer(self)
-        self._countdown_player.setMedia(
-            QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / "countdown.mp3")))
-        )
-        self._level_stingers: dict = {}
-        for lvl in (1, 2, 3):
+        def _player(filename: str) -> QMediaPlayer:
             pl = QMediaPlayer(self)
-            pl.setMedia(QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / f"level-{lvl}.mp3"))))
-            self._level_stingers[lvl] = pl
-        self._popping_player = QMediaPlayer(self)
-        self._popping_player.setMedia(
-            QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / "popping.mp3")))
-        )
+            path = (ASSETS_DIR / filename).as_posix()
+            pl.setMedia(QMediaContent(QUrl.fromLocalFile(path)))
+            return pl
+
+        self._countdown_player = _player("countdown.mp3")
+        self._level_stingers: dict = {lvl: _player(f"level-{lvl}.mp3") for lvl in (1, 2, 3)}
+        self._popping_player = _player("popping.mp3")
 
         _alert_playlist = QMediaPlaylist(self)
-        _alert_playlist.addMedia(QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / "alert.mp3"))))
+        _alert_playlist.addMedia(QMediaContent(QUrl.fromLocalFile((ASSETS_DIR / "alert.mp3").as_posix())))
         _alert_playlist.setPlaybackMode(QMediaPlaylist.Loop)
         self._alert_player = QMediaPlayer(self)
         self._alert_player.setPlaylist(_alert_playlist)
 
-        self._music_player = QMediaPlayer(self)
-        self._music_player.setMedia(
-            QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / "game-music.mp3")))
-        )
+        self._music_player = _player("game-music.mp3")
         self._music_player.mediaStatusChanged.connect(self._on_music_status)
         self._music_player.play()
 
-        self._youre_fired_player = QMediaPlayer(self)
-        self._youre_fired_player.setMedia(
-            QMediaContent(QUrl.fromLocalFile(str(ASSETS_DIR / "YoureFired.mp3")))
-        )
+        self._youre_fired_player = _player("YoureFired.mp3")
+
+        # On Windows, WMF doesn't fully initialize a media session until play() is
+        # called at least once. Silently warm up every one-shot player so they're
+        # ready when triggered during gameplay.
+        self._one_shot_players = [
+            self._countdown_player,
+            *self._level_stingers.values(),
+            self._popping_player,
+            self._youre_fired_player,
+        ]
+        QTimer.singleShot(0, self._warm_up_players)
 
         self._last_countdown_started = False
 
@@ -298,6 +299,18 @@ class _GameWidget(QWidget):
         if status == QMediaPlayer.EndOfMedia:
             self._music_player.setPosition(0)
             self._music_player.play()
+
+    def _warm_up_players(self) -> None:
+        for pl in self._one_shot_players:
+            pl.setVolume(0)
+            pl.play()
+        QTimer.singleShot(200, self._finish_warm_up)
+
+    def _finish_warm_up(self) -> None:
+        for pl in self._one_shot_players:
+            pl.stop()
+            pl.setPosition(0)
+            pl.setVolume(100)
 
     def mousePressEvent(self, event) -> None:
         if (self._engine.state.phase == GamePhase.WELCOME
