@@ -1,7 +1,9 @@
 import math
+import os
 import random
 import sys
 import time
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 from PyQt5.QtCore import Qt, QTimer, QRect, QUrl
@@ -1911,6 +1913,20 @@ def _load_bundled_fonts() -> None:
 
 class PyQtRenderer(GameRenderer):
     def start(self, gaze_provider: GazeProvider) -> None:
+        # When frozen by PyInstaller, Qt doesn't know where its plugins landed.
+        # Point it at the extracted _MEIPASS tree before QApplication starts.
+        if getattr(sys, "frozen", False):
+            meipass = Path(sys._MEIPASS)
+            for candidate in [
+                meipass / "PyQt5" / "Qt5" / "plugins",
+                meipass / "PyQt5" / "Qt" / "plugins",
+                meipass / "PyQt5",
+                meipass,
+            ]:
+                if candidate.exists():
+                    os.environ["QT_PLUGIN_PATH"] = str(candidate)
+                    break
+
         QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
         QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         app = QApplication(sys.argv)
