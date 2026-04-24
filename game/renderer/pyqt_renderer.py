@@ -6,6 +6,12 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+_LOG_PATH = Path(sys.executable).parent / "audio_debug.log" if getattr(sys, "frozen", False) else Path("audio_debug.log")
+
+def _log(msg: str) -> None:
+    with open(_LOG_PATH, "a") as f:
+        f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+
 from PyQt5.QtCore import Qt, QTimer, QRect, QUrl
 from PyQt5.QtGui import QColor, QFont, QFontDatabase, QPainter, QPainterPath, QPen, QBrush, QRadialGradient
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent, QMediaPlaylist
@@ -339,7 +345,7 @@ class _GameWidget(QWidget):
         if state.phase == GamePhase.COUNTDOWN:
             if not self._last_countdown_started:
                 self._last_countdown_started = True
-                self._countdown_player.stop()
+                self._countdown_player.playlist().setCurrentIndex(0)
                 self._countdown_player.play()
         else:
             self._last_countdown_started = False
@@ -347,15 +353,18 @@ class _GameWidget(QWidget):
         # Level stingers
         new_level = state.level if state.phase in (GamePhase.COUNTDOWN, GamePhase.PLAYING) else 0
         if new_level == 1 and self._last_level == 0 and state.phase == GamePhase.PLAYING:
-            self._level_stingers[1].stop()
-            self._level_stingers[1].play()
+            pl = self._level_stingers[1]
+            _log(f"stinger1 before play: state={pl.state()} status={pl.mediaStatus()} error={pl.error()}")
+            pl.playlist().setCurrentIndex(0)
+            pl.play()
+            _log(f"stinger1 after play:  state={pl.state()}")
             self._last_level = 1
         elif new_level == 2 and self._last_level == 1:
-            self._level_stingers[2].stop()
+            self._level_stingers[2].playlist().setCurrentIndex(0)
             self._level_stingers[2].play()
             self._last_level = 2
         elif new_level == 3 and self._last_level == 2:
-            self._level_stingers[3].stop()
+            self._level_stingers[3].playlist().setCurrentIndex(0)
             self._level_stingers[3].play()
             self._last_level = 3
 
@@ -364,7 +373,7 @@ class _GameWidget(QWidget):
             self._popup_sender_idx = random.randrange(len(_SENDERS))
             self._last_bonus_phrase = state.bonus_phrase
             self._popup_x, self._popup_y = self._pick_popup_pos(state)
-            self._popping_player.stop()
+            self._popping_player.playlist().setCurrentIndex(0)
             self._popping_player.play()
 
         # Auto-submit when phrase typed exactly
@@ -378,7 +387,7 @@ class _GameWidget(QWidget):
 
         # "You're Fired" sting: play once on transition into GAME_OVER
         if state.phase == GamePhase.GAME_OVER and self._last_phase != GamePhase.GAME_OVER:
-            self._youre_fired_player.setPosition(0)
+            self._youre_fired_player.playlist().setCurrentIndex(0)
             self._youre_fired_player.play()
         self._last_phase = state.phase
 
