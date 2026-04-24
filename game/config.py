@@ -17,4 +17,5 @@ BONUS_POINTS = 30            # points awarded per correct answer
 LEVEL_NAMES = {1: "Spreadsheet", 2: "Gmail", 3: "Slides"}
 # Score at which each level begins; also the threshold to advance to that level
 LEVEL_START_SCORES = {1: 0, 2: 100, 3: 200}
+WIN_SCORE = 400
 

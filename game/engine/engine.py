@@ -1,7 +1,7 @@
 import math
 import random
 
-from ..config import BONUS_APPEAR_AFTER, BONUS_POINTS, LEVEL_START_SCORES, TARGET_RADIUS
+from ..config import BONUS_APPEAR_AFTER, BONUS_POINTS, LEVEL_START_SCORES, TARGET_RADIUS, WIN_SCORE
 from ..gaze_providers.base import GazeProvider
 from .state import GamePhase, GameState, Target
 
@@ -158,7 +158,7 @@ class GameEngine:
     def update(self, dt: float) -> None:
         state = self._state
 
-        if state.phase in (GamePhase.WELCOME, GamePhase.GAME_OVER):
+        if state.phase in (GamePhase.WELCOME, GamePhase.GAME_OVER, GamePhase.WIN):
             gx, gy = self._gaze.get_gaze_position()
             state.gaze_x, state.gaze_y = gx, gy
             return
@@ -207,6 +207,9 @@ class GameEngine:
                 state.level = 2
             elif state.level == 2 and state.score >= LEVEL_START_SCORES[3]:
                 state.level = 3
+            elif state.level == 3 and state.score >= WIN_SCORE:
+                state.phase = GamePhase.WIN
+                return
         else:
             self._drift_s += dt
             if self._drift_s >= _LOOKAWAY_FIRE_S:
@@ -316,6 +319,9 @@ class GameEngine:
     def click_start(self) -> None:
         if self._state.phase == GamePhase.WELCOME:
             self._state.phase = GamePhase.WAITING
+
+    def force_win(self) -> None:
+        self._state.phase = GamePhase.WIN
 
     def calibrate(self) -> None:
         self._gaze.calibrate()

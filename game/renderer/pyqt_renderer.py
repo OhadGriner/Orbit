@@ -6,18 +6,12 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-_LOG_PATH = Path(sys.executable).parent / "audio_debug.log" if getattr(sys, "frozen", False) else Path("audio_debug.log")
-
-def _log(msg: str) -> None:
-    with open(_LOG_PATH, "a") as f:
-        f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
-
 from PyQt5.QtCore import Qt, QTimer, QRect, QUrl
-from PyQt5.QtGui import QColor, QFont, QFontDatabase, QPainter, QPainterPath, QPen, QBrush, QRadialGradient
+from PyQt5.QtGui import QColor, QFont, QFontDatabase, QPainter, QPainterPath, QPen, QBrush, QRadialGradient, QLinearGradient
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent, QMediaPlaylist
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
 
-from ..config import ASSETS_DIR, LEVEL_NAMES, LEVEL_START_SCORES
+from ..config import ASSETS_DIR, LEVEL_NAMES, LEVEL_START_SCORES, WIN_SCORE
 from ..engine.engine import GameEngine
 from ..engine.state import GamePhase, GameState
 from ..gaze_providers.base import GazeProvider
@@ -269,8 +263,6 @@ class _GameWidget(QWidget):
             plist.setPlaybackMode(QMediaPlaylist.CurrentItemOnce)
             pl = QMediaPlayer(self)
             pl.setPlaylist(plist)
-            pl.error.connect(lambda err: _log(f"{filename} ERROR signal: code={err} msg={pl.errorString()}"))
-            pl.mediaStatusChanged.connect(lambda s: _log(f"{filename} statusChanged: {s}"))
             return pl
 
         self._countdown_player = _playlist_player("countdown.mp3")
@@ -288,6 +280,12 @@ class _GameWidget(QWidget):
         self._music_player.play()
 
         self._youre_fired_player = _playlist_player("YoureFired.mp3")
+
+        _success_playlist = QMediaPlaylist(self)
+        _success_playlist.addMedia(QMediaContent(QUrl.fromLocalFile((ASSETS_DIR / "success-music.mp3").as_posix())))
+        _success_playlist.setPlaybackMode(QMediaPlaylist.Loop)
+        self._success_player = QMediaPlayer(self)
+        self._success_player.setPlaylist(_success_playlist)
 
         self._last_countdown_started = False
 
@@ -355,12 +353,8 @@ class _GameWidget(QWidget):
         # Level stingers
         new_level = state.level if state.phase in (GamePhase.COUNTDOWN, GamePhase.PLAYING) else 0
         if new_level == 1 and self._last_level == 0 and state.phase == GamePhase.PLAYING:
-            pl = self._level_stingers[1]
-            _log(f"stinger1 before play: state={pl.state()} status={pl.mediaStatus()} error={pl.error()} volume={pl.volume()}")
-            pl.playlist().setCurrentIndex(0)
-            pl.play()
-            _log(f"stinger1 after play:  state={pl.state()}")
-            QTimer.singleShot(500, lambda: _log(f"stinger1 @500ms:      state={pl.state()} status={pl.mediaStatus()} error={pl.error()}"))
+            self._level_stingers[1].playlist().setCurrentIndex(0)
+            self._level_stingers[1].play()
             self._last_level = 1
         elif new_level == 2 and self._last_level == 1:
             self._level_stingers[2].playlist().setCurrentIndex(0)
@@ -394,11 +388,11 @@ class _GameWidget(QWidget):
             self._youre_fired_player.play()
         self._last_phase = state.phase
 
-        # Background music: pause on game-over screen, resume everywhere else
+        # Background music: pause on game-over/win screen, resume everywhere else
         music_playing = self._music_player.state() == QMediaPlayer.PlayingState
-        if state.phase == GamePhase.GAME_OVER and music_playing:
+        if state.phase in (GamePhase.GAME_OVER, GamePhase.WIN) and music_playing:
             self._music_player.pause()
-        elif state.phase != GamePhase.GAME_OVER and not music_playing:
+        elif state.phase not in (GamePhase.GAME_OVER, GamePhase.WIN) and not music_playing:
             self._music_player.play()
 
         # Alert sound: loop while gaze is off target, stop when back on or game ends
@@ -408,6 +402,13 @@ class _GameWidget(QWidget):
             self._alert_player.play()
         elif not should_alert and alert_playing:
             self._alert_player.stop()
+
+        # Success music: loop on WIN screen
+        success_playing = self._success_player.state() == QMediaPlayer.PlayingState
+        if state.phase == GamePhase.WIN and not success_playing:
+            self._success_player.play()
+        elif state.phase != GamePhase.WIN and success_playing:
+            self._success_player.stop()
 
         self.update()
 
@@ -429,16 +430,24 @@ class _GameWidget(QWidget):
                 self._dev_d_pressed_at = None
             elif event.key() in (Qt.Key_1, Qt.Key_2, Qt.Key_3):
                 self._dev_selected_level = int(event.text())
+            elif event.key() == Qt.Key_W:
+                self._dev_selected_level = 0  # sentinel for win screen
             elif event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
                 self._dev_mode = False
-                self._engine.set_start_level(self._dev_selected_level)
-                self._engine.click_start()
-                if self._dev_selected_level >= 2:
+                if self._dev_selected_level == 0:
                     self._level_transition = 1.0
-                if self._dev_selected_level >= 3:
                     self._level_transition_23 = 1.0
-                self._last_level = self._dev_selected_level - 1
-                self.setCursor(Qt.BlankCursor)
+                    self._last_level = 3
+                    self._engine.force_win()
+                else:
+                    self._engine.set_start_level(self._dev_selected_level)
+                    self._engine.click_start()
+                    if self._dev_selected_level >= 2:
+                        self._level_transition = 1.0
+                    if self._dev_selected_level >= 3:
+                        self._level_transition_23 = 1.0
+                    self._last_level = self._dev_selected_level - 1
+                    self.setCursor(Qt.BlankCursor)
             return
 
         if event.key() == Qt.Key_Escape:
@@ -454,8 +463,9 @@ class _GameWidget(QWidget):
             return
         if event.key() == Qt.Key_C:
             self._engine.calibrate()
-        elif event.key() == Qt.Key_R and state.phase == GamePhase.GAME_OVER:
+        elif event.key() == Qt.Key_R and state.phase in (GamePhase.GAME_OVER, GamePhase.WIN):
             self._youre_fired_player.stop()
+            self._success_player.stop()
             self._last_phase = None
             self._engine.reset()
             self._last_tick = time.perf_counter()
@@ -510,6 +520,8 @@ class _GameWidget(QWidget):
             self._draw_gaze(p, state, t)
         elif state.phase == GamePhase.GAME_OVER:
             self._draw_fired(p, state, w, h)
+        elif state.phase == GamePhase.WIN:
+            self._draw_win(p, w, h)
 
         p.end()
 
@@ -1623,11 +1635,8 @@ class _GameWidget(QWidget):
             rx += cw
         cy += 24
 
-        # "v3.2.1-q3.rc.4  ·  ~3 min  ·  non-optional"
         p.setPen(QColor(160, 160, 160))
         p.setFont(_font(10, bold=False))
-        p.drawText(QRect(card_x, cy, card_w, 20), Qt.AlignCenter,
-                   "v3.2.1-q3.rc.4  ·  ~3 min  ·  non-optional")
         cy += 20 + 26
 
         # ── Steps ─────────────────────────────────────────────────────────
@@ -1699,8 +1708,7 @@ class _GameWidget(QWidget):
         # Footer
         p.setPen(QColor(175, 175, 175))
         p.setFont(_font(9, bold=False))
-        p.drawText(QRect(card_x, cy, card_w, 20), Qt.AlignCenter,
-                   "A cognitive performance assessment by Orbit Labs™")
+
 
 
     # ── Developer mode overlay ────────────────────────────────────────────
@@ -1718,7 +1726,7 @@ class _GameWidget(QWidget):
     def _draw_dev_overlay(self, p: QPainter, w: int, h: int) -> None:
         p.fillRect(0, 0, w, h, QColor(0, 0, 0, 160))
 
-        panel_w, panel_h = 420, 330
+        panel_w, panel_h = 420, 400
         px = (w - panel_w) // 2
         py = (h - panel_h) // 2
 
@@ -1766,10 +1774,34 @@ class _GameWidget(QWidget):
                        Qt.AlignLeft | Qt.AlignVCenter, hint)
             by += btn_h + 10
 
+        # Win Screen button
+        selected = self._dev_selected_level == 0
+        if selected:
+            p.setPen(Qt.NoPen)
+            p.setBrush(QBrush(QColor(10, 122, 99)))
+            p.drawRoundedRect(btn_x, by, btn_w, btn_h, 10, 10)
+            name_col = QColor(255, 255, 255)
+            hint_col = QColor(160, 230, 200)
+        else:
+            p.setPen(QPen(QColor(70, 70, 75), 1))
+            p.setBrush(QBrush(QColor(44, 44, 46)))
+            p.drawRoundedRect(btn_x, by, btn_w, btn_h, 10, 10)
+            name_col = QColor(190, 190, 195)
+            hint_col = QColor(110, 110, 115)
+        p.setPen(name_col)
+        p.setFont(_font(12, bold=True))
+        p.drawText(QRect(btn_x + 16, by, btn_w - 16, btn_h // 2 + 6),
+                   Qt.AlignLeft | Qt.AlignVCenter, "W   Win Screen")
+        p.setPen(hint_col)
+        p.setFont(_font(10, bold=False))
+        p.drawText(QRect(btn_x + 16, by + btn_h // 2, btn_w - 16, btn_h // 2),
+                   Qt.AlignLeft | Qt.AlignVCenter, "Jump straight to the finish")
+        by += btn_h + 10
+
         p.setPen(QColor(100, 100, 105))
         p.setFont(_font(10, bold=False))
         p.drawText(QRect(px, by + 10, panel_w, 20), Qt.AlignCenter,
-                   "1 / 2 / 3  to select   ·   Enter  to start   ·   Esc  to cancel")
+                   "1 / 2 / 3 / W  to select   ·   Enter  to start   ·   Esc  to cancel")
 
     # ── Waiting/calibrate screen ──────────────────────────────────────────
 
@@ -1914,6 +1946,194 @@ class _GameWidget(QWidget):
         p.setFont(_font(10, bold=False))
         p.drawText(QRect(0, by2 + bh2 + 12, w, 20), Qt.AlignCenter,
                    "signed, The Algorithm  ·  Esc to quit")
+
+    def _draw_win(self, p: QPainter, w: int, h: int) -> None:
+        p.fillRect(0, 0, w, h, QBrush(_C_CANVAS))
+
+        # Rainbow top bar
+        rb = QLinearGradient(0, 0, w, 0)
+        rb.setColorAt(0.00, QColor(255, 80,  80))
+        rb.setColorAt(0.20, QColor(255, 160, 40))
+        rb.setColorAt(0.40, QColor(250, 220, 30))
+        rb.setColorAt(0.55, QColor(60,  190, 80))
+        rb.setColorAt(0.75, QColor(40,  130, 220))
+        rb.setColorAt(1.00, QColor(160, 60,  220))
+        p.fillRect(0, 0, w, 5, QBrush(rb))
+
+        # Header bar
+        p.fillRect(0, 5, w, 40, QBrush(_C_SURFACE))
+        p.setPen(QPen(_C_LINE, 1))
+        p.drawLine(0, 44, w, 44)
+        p.setPen(_C_INK3)
+        p.setFont(_font(9, bold=False))
+        p.drawText(QRect(32, 5, w // 2, 40), Qt.AlignVCenter | Qt.AlignLeft,
+                   "Q3 PERFORMANCE REVIEW")
+        p.drawText(QRect(w // 2, 5, w // 2 - 32, 40), Qt.AlignVCenter | Qt.AlignRight,
+                   "CONFIDENTIAL · DO NOT SHARE (PLEASE)")
+
+        # Content area — centred, max 860 px wide
+        cw = min(860, w - 80)
+        cx = (w - cw) // 2
+        cy = 62
+
+        # "ASSESSMENT COMPLETE" label
+        p.setPen(_C_INK3)
+        p.setFont(_font(9, bold=False))
+        p.drawText(QRect(cx, cy, cw, 18), Qt.AlignLeft | Qt.AlignVCenter, "ASSESSMENT COMPLETE")
+
+        # Score card (top-right of content)
+        sc_w, sc_h = 200, 128
+        sc_x = cx + cw - sc_w
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(_C_SURFACE))
+        p.drawRoundedRect(sc_x, cy, sc_w, sc_h, 10, 10)
+        p.setPen(QPen(_C_LINE, 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(sc_x, cy, sc_w, sc_h, 10, 10)
+        p.setPen(_C_BRAND)
+        p.setFont(_font(48, bold=True))
+        p.drawText(QRect(sc_x, cy + 8, sc_w - 16, 62), Qt.AlignRight | Qt.AlignTop, "10")
+        p.setPen(_C_INK3)
+        p.setFont(_font(13, bold=False))
+        p.drawText(QRect(sc_x, cy + 72, sc_w - 16, 20), Qt.AlignRight, "/ 10")
+        badge_w, badge_h = 124, 22
+        bx = sc_x + (sc_w - badge_w) // 2
+        by = cy + sc_h - badge_h - 10
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(_C_OK_BG))
+        p.drawRoundedRect(bx, by, badge_w, badge_h, 11, 11)
+        p.setPen(_C_OK_TEXT)
+        p.setFont(_font(8, bold=True))
+        p.drawText(QRect(bx, by, badge_w, badge_h), Qt.AlignCenter, "PERFECT SCORE")
+
+        # "You nailed it." heading
+        p.setPen(_C_INK)
+        p.setFont(_font(56, bold=True))
+        p.drawText(QRect(cx, cy + 14, cw - sc_w - 24, 90),
+                   Qt.AlignLeft | Qt.AlignVCenter, "You nailed it.")
+
+        cy += sc_h + 20
+
+        # Three metric cards
+        card_h = 112
+        gap = 12
+        card_w = (cw - gap * 2) // 3
+        _GOLD = QColor(180, 130, 20)
+        cards = [
+            ("A+",    _C_SEL,     "PERFORMANCE BAND",   "Peak Human · Elite Tier"),
+            ("10/10", _C_OK_TEXT, "SYNERGIES UNLOCKED",  "All of them. Even the ones\nnobody told you about."),
+            ("∞",     _GOLD,      "GROWTH POTENTIAL",    "Theoretical ceiling:\npending review."),
+        ]
+        for i, (val, color, label, desc) in enumerate(cards):
+            cx_c = cx + i * (card_w + gap)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QBrush(_C_SURFACE))
+            p.drawRoundedRect(cx_c, cy, card_w, card_h, 8, 8)
+            p.setPen(QPen(_C_LINE, 1))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(cx_c, cy, card_w, card_h, 8, 8)
+            p.setPen(color)
+            p.setFont(_font(28, bold=True))
+            p.drawText(QRect(cx_c + 14, cy + 10, card_w - 28, 40),
+                       Qt.AlignLeft | Qt.AlignVCenter, val)
+            p.setPen(_C_INK3)
+            p.setFont(_font(8, bold=False))
+            p.drawText(QRect(cx_c + 14, cy + 52, card_w - 28, 16), Qt.AlignLeft, label)
+            p.setPen(_C_INK)
+            p.setFont(_font(9, bold=False))
+            p.drawText(QRect(cx_c + 14, cy + 68, card_w - 28, 36),
+                       Qt.AlignLeft | Qt.TextWordWrap, desc)
+
+        cy += card_h + 16
+
+        # Special commendation box (yellow)
+        comm_h = 82
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(_C_RISK_BG))
+        p.drawRoundedRect(cx, cy, cw, comm_h, 8, 8)
+        star_r = 20
+        scx = cx + 24 + star_r
+        scy = cy + comm_h // 2
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(QColor(215, 160, 20)))
+        p.drawEllipse(scx - star_r, scy - star_r, star_r * 2, star_r * 2)
+        p.setPen(_C_SURFACE)
+        p.setFont(_font(16, bold=True))
+        p.drawText(QRect(scx - star_r, scy - star_r, star_r * 2, star_r * 2),
+                   Qt.AlignCenter, "★")
+        tx = cx + 24 + star_r * 2 + 16
+        tw = cw - (24 + star_r * 2 + 16) - 16
+        p.setPen(_C_RISK_TEXT)
+        p.setFont(_font(9, bold=True))
+        p.drawText(QRect(tx, cy + 10, tw, 18), Qt.AlignLeft, "Special commendation")
+        p.setPen(_C_INK)
+        p.setFont(_font(9, bold=False))
+        p.drawText(QRect(tx, cy + 28, tw, 46), Qt.AlignLeft | Qt.TextWordWrap,
+                   "You have been added to the High Performers list. This list is closely "
+                   "monitored to ensure it remains long enough to look good in the annual report.")
+
+        cy += comm_h + 16
+
+        # Congratulations box (light blue)
+        cong_h = 116
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(QColor(228, 233, 250)))
+        p.drawRoundedRect(cx, cy, cw, cong_h, 8, 8)
+        p.setPen(_C_INK)
+        p.setFont(_font(13, bold=False))
+        p.drawText(QRect(cx + 20, cy + 14, cw - 40, 26),
+                   Qt.AlignCenter, "Congratulations on your outstanding performance.")
+        p.setPen(_C_SEL)
+        p.setFont(_font(16, bold=True))
+        p.drawText(QRect(cx + 20, cy + 42, cw - 40, 30),
+                   Qt.AlignCenter, "As a reward, you've unlocked... more work.")
+        italic_f = _font(9, bold=False)
+        italic_f.setItalic(True)
+        p.setFont(italic_f)
+        p.setPen(_C_INK3)
+        p.drawText(QRect(cx + 20, cy + 78, cw - 40, 22), Qt.AlignCenter,
+                   "Additional responsibilities will be discussed at your current compensation level.")
+
+        cy += cong_h + 20
+
+        # Buttons
+        btn_h = 44
+        btn_w = 240
+        # Filled: "Run another sprint"
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(_C_SEL))
+        p.drawRoundedRect(cx, cy, btn_w, btn_h, 22, 22)
+        p.setPen(_C_SURFACE)
+        p.setFont(_font(12, bold=True))
+        p.drawText(QRect(cx, cy, btn_w, btn_h), Qt.AlignCenter, "R  —  Run another sprint  ↗")
+        # Outline: "Review my metrics"
+        p.setPen(QPen(_C_SEL, 2))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(cx + btn_w + 12, cy, btn_w, btn_h, 22, 22)
+        p.setPen(_C_SEL)
+        p.setFont(_font(12, bold=False))
+        p.drawText(QRect(cx + btn_w + 12, cy, btn_w, btn_h), Qt.AlignCenter,
+                   "Review my metrics  ↗")
+        # "signed, The Algorithm"
+        p.setPen(_C_INK3)
+        italic_f2 = _font(10, bold=False)
+        italic_f2.setItalic(True)
+        p.setFont(italic_f2)
+        p.drawText(QRect(cx, cy, cw, btn_h), Qt.AlignVCenter | Qt.AlignRight,
+                   "signed, The Algorithm")
+
+        cy += btn_h + 14
+
+        # Footer
+        p.setPen(QPen(_C_LINE, 1))
+        p.drawLine(cx, cy, cx + cw, cy)
+        cy += 8
+        p.setPen(_C_INK3)
+        p.setFont(_font(8, bold=False))
+        p.drawText(QRect(cx, cy, cw, 20), Qt.AlignCenter,
+                   "Workplace Excellence Division  ·  "
+                   "Approved by no fewer than 3 middle managers  ·  "
+                   "Results subject to reinterpretation")
 
 
 def _load_bundled_fonts() -> None:

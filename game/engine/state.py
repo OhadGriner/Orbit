@@ -8,6 +8,7 @@ class GamePhase(Enum):
     COUNTDOWN = auto()
     PLAYING = auto()
     GAME_OVER = auto()
+    WIN = auto()
 
 
 @dataclass
