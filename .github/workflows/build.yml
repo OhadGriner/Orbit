@@ -2,6 +2,8 @@ name: Build macOS App
 
 on:
   push:
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -26,11 +28,16 @@ jobs:
       - name: Zip app bundle
         run: |
           cd dist
-          mv Orbit.app Orbit-${{ github.sha }}.app
-          zip -r Orbit-${{ github.sha }}-mac.zip Orbit-${{ github.sha }}.app
+          mv Orbit.app Orbit-${{ github.ref_name }}.app
+          zip -r Orbit-${{ github.ref_name }}-mac.zip Orbit-${{ github.ref_name }}.app
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Orbit-${{ github.sha }}-mac
-          path: dist/Orbit-${{ github.sha }}-mac.zip
+          name: Orbit-${{ github.ref_name }}-mac
+          path: dist/Orbit-${{ github.ref_name }}-mac.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Orbit-${{ github.ref_name }}-mac.zip
