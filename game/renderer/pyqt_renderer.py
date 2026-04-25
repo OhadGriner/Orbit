@@ -1267,9 +1267,10 @@ class _GameWidget(QWidget):
         p.setFont(_font(11, bold=False))
         lw = p.fontMetrics().horizontalAdvance(label)
 
-        pill_w = lw + score_w + 60
+        chip_w = 38
+        pill_w = min(lw + score_w + 60, w - chip_w - 28)  # clamp so pill+chip fit
         pill_h = 28
-        pill_x = w - pill_w - 14
+        pill_x = w - pill_w - chip_w - 14
         pill_y = 10
 
         pop_age = t - self._score_pop_t
@@ -1298,7 +1299,6 @@ class _GameWidget(QWidget):
 
         # "live" chip
         chip_x = pill_x + pill_w + 8
-        chip_w = 38
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(_C_BRAND))
         p.drawRoundedRect(chip_x, pill_y + 4, chip_w, pill_h - 8, (pill_h - 8) // 2, (pill_h - 8) // 2)
@@ -1560,9 +1560,10 @@ class _GameWidget(QWidget):
         # ── Card ─────────────────────────────────────────────────────────
         nav_total = bar_h + nav_h
         card_w  = min(700, max(500, w // 2 + 60))
-        card_h  = 640
+        card_h  = min(640, h - nav_total - 32)   # shrink on small screens
+        vscale  = card_h / 640.0                  # scale factor for inner layout
         card_x  = (w - card_w) // 2
-        card_y  = nav_total + max(16, (h - nav_total - card_h) // 2)
+        card_y  = nav_total + max(8, (h - nav_total - card_h) // 2)
         card_cx = card_x + card_w // 2
 
         p.setPen(Qt.NoPen)
@@ -1584,27 +1585,29 @@ class _GameWidget(QWidget):
         p.restore()
 
         # ── Content ───────────────────────────────────────────────────────
-        cy = card_y + 6 + 32
+        cy = card_y + int(38 * vscale)
 
         # Logo icon
-        icon_sz  = 80
-        frame_sz = icon_sz + 20
+        icon_sz  = int(80 * vscale)
+        frame_sz = icon_sz + int(20 * vscale)
         frame_x  = card_cx - frame_sz // 2
         p.setPen(QPen(QColor(218, 218, 218), 1))
         p.setBrush(QBrush(QColor(246, 246, 246)))
-        p.drawRoundedRect(frame_x, cy, frame_sz, frame_sz, 18, 18)
+        p.drawRoundedRect(frame_x, cy, frame_sz, frame_sz, int(18 * vscale), int(18 * vscale))
         if self._target_pixmap:
             scaled = self._target_pixmap.scaled(
                 icon_sz, icon_sz, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             p.drawPixmap(frame_x + (frame_sz - scaled.width()) // 2,
                          cy     + (frame_sz - scaled.height()) // 2, scaled)
-        cy += frame_sz + 16
+        cy += frame_sz + int(16 * vscale)
 
         # "Orbit"
+        orbit_font_sz = int(42 * max(0.7, vscale))
+        orbit_h = int(54 * vscale)
         p.setPen(QColor(20, 20, 20))
-        p.setFont(_font(42, bold=True))
-        p.drawText(QRect(card_x, cy, card_w, 54), Qt.AlignCenter, "Orbit")
-        cy += 54 + 10
+        p.setFont(_font(orbit_font_sz, bold=True))
+        p.drawText(QRect(card_x, cy, card_w, orbit_h), Qt.AlignCenter, "Orbit")
+        cy += orbit_h + int(10 * vscale)
 
         # "PERIPHERAL VISION ASSESSMENT  PROTOCOL A  —  by  Google"
         tag1  = "Corporate Performance Assessment"
@@ -1620,7 +1623,7 @@ class _GameWidget(QWidget):
         g_ws   = [fm_g.horizontalAdvance(c) for c in "Google"]
         total_w = t1_w + t2_w + by_w + sum(g_ws)
         rx = card_cx - total_w // 2
-        base = cy + 16
+        base = cy + int(16 * vscale)
         p.setFont(_font(10, bold=False))
         p.setPen(QColor(130, 130, 130))
         p.drawText(rx, base, tag1);  rx += t1_w
@@ -1633,11 +1636,11 @@ class _GameWidget(QWidget):
             p.setPen(col)
             p.drawText(rx, base, ch)
             rx += cw
-        cy += 24
+        cy += int(24 * vscale)
 
         p.setPen(QColor(160, 160, 160))
         p.setFont(_font(10, bold=False))
-        cy += 20 + 26
+        cy += int(46 * vscale)
 
         # ── Steps ─────────────────────────────────────────────────────────
         step_colors = [_GBL, _GRD, _GGR]
@@ -1649,11 +1652,11 @@ class _GameWidget(QWidget):
             ("Try to respond to your corporate colleagues",
              "by completing their deliverables as they appear."),
         ]
-        pad_l  = 44
-        circ_d = 28
-        text_x = card_x + pad_l + circ_d + 14
-        text_w = card_w - pad_l - circ_d - 14 - 36
-        line_h = 20
+        pad_l  = int(44 * vscale)
+        circ_d = int(28 * vscale)
+        text_x = card_x + pad_l + circ_d + int(14 * vscale)
+        text_w = card_w - pad_l - circ_d - int(14 * vscale) - 36
+        line_h = int(20 * vscale)
 
         for i, (bold_lbl, desc) in enumerate(steps):
             sy = cy
@@ -1664,13 +1667,14 @@ class _GameWidget(QWidget):
             p.setFont(_font(10, bold=True))
             p.drawText(QRect(card_x + pad_l, sy, circ_d, circ_d), Qt.AlignCenter, str(i + 1))
 
-            p.setFont(_font(12, bold=True))
+            step_font_sz = int(12 * max(0.8, vscale))
+            p.setFont(_font(step_font_sz, bold=True))
             p.setPen(QColor(25, 25, 25))
             lbl_w  = p.fontMetrics().horizontalAdvance(bold_lbl + " ")
-            base_y = sy + circ_d // 2 + 5
+            base_y = sy + circ_d // 2 + int(5 * vscale)
             p.drawText(text_x, base_y, bold_lbl + " ")
 
-            p.setFont(_font(12, bold=False))
+            p.setFont(_font(step_font_sz, bold=False))
             p.setPen(QColor(70, 70, 70))
             fm_d = p.fontMetrics()
             avail = text_w - lbl_w
@@ -1686,24 +1690,24 @@ class _GameWidget(QWidget):
             p.drawText(text_x + lbl_w, base_y, " ".join(line1))
             if rest_words:
                 p.drawText(text_x, base_y + line_h, " ".join(rest_words))
-                cy += max(circ_d, line_h * 2 + 8) + 14
+                cy += max(circ_d, line_h * 2 + int(8 * vscale)) + int(14 * vscale)
             else:
-                cy += max(circ_d, line_h + 4) + 14
+                cy += max(circ_d, line_h + int(4 * vscale)) + int(14 * vscale)
 
-        cy += 8
+        cy += int(8 * vscale)
 
         # ── "Begin Assessment →" button ───────────────────────────────────
-        btn_w = card_w - 80
-        btn_h = 54
+        btn_w = card_w - int(80 * vscale)
+        btn_h = int(54 * vscale)
         btn_x = card_cx - btn_w // 2
         self._start_btn_rect = QRect(btn_x, cy, btn_w, btn_h)
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(_GBL))
         p.drawRoundedRect(btn_x, cy, btn_w, btn_h, btn_h // 2, btn_h // 2)
         p.setPen(QColor(255, 255, 255))
-        p.setFont(_font(14, bold=True))
+        p.setFont(_font(int(14 * max(0.85, vscale)), bold=True))
         p.drawText(QRect(btn_x, cy, btn_w, btn_h), Qt.AlignCenter, "Begin Assessment  →")
-        cy += btn_h + 14
+        cy += btn_h + int(14 * vscale)
 
         # Footer
         p.setPen(QColor(175, 175, 175))
@@ -1975,6 +1979,8 @@ class _GameWidget(QWidget):
         cw = min(860, w - 80)
         cx = (w - cw) // 2
         cy = 62
+        # Scale vertical layout to fit smaller screens (target total ~570px below cy=62)
+        wvscale = min(1.0, (h - 62) / 580.0)
 
         # "ASSESSMENT COMPLETE" label
         p.setPen(_C_INK3)
@@ -1982,7 +1988,7 @@ class _GameWidget(QWidget):
         p.drawText(QRect(cx, cy, cw, 18), Qt.AlignLeft | Qt.AlignVCenter, "ASSESSMENT COMPLETE")
 
         # Score card (top-right of content)
-        sc_w, sc_h = 200, 128
+        sc_w, sc_h = 200, int(128 * wvscale)
         sc_x = cx + cw - sc_w
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(_C_SURFACE))
@@ -1991,11 +1997,11 @@ class _GameWidget(QWidget):
         p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(sc_x, cy, sc_w, sc_h, 10, 10)
         p.setPen(_C_BRAND)
-        p.setFont(_font(48, bold=True))
-        p.drawText(QRect(sc_x, cy + 8, sc_w - 16, 62), Qt.AlignRight | Qt.AlignTop, "10")
+        p.setFont(_font(int(48 * max(0.75, wvscale)), bold=True))
+        p.drawText(QRect(sc_x, cy + int(8 * wvscale), sc_w - 16, int(62 * wvscale)), Qt.AlignRight | Qt.AlignTop, "10")
         p.setPen(_C_INK3)
         p.setFont(_font(13, bold=False))
-        p.drawText(QRect(sc_x, cy + 72, sc_w - 16, 20), Qt.AlignRight, "/ 10")
+        p.drawText(QRect(sc_x, cy + int(72 * wvscale), sc_w - 16, 20), Qt.AlignRight, "/ 10")
         badge_w, badge_h = 124, 22
         bx = sc_x + (sc_w - badge_w) // 2
         by = cy + sc_h - badge_h - 10
@@ -2008,14 +2014,14 @@ class _GameWidget(QWidget):
 
         # "You nailed it." heading
         p.setPen(_C_INK)
-        p.setFont(_font(56, bold=True))
-        p.drawText(QRect(cx, cy + 14, cw - sc_w - 24, 90),
+        p.setFont(_font(int(56 * max(0.7, wvscale)), bold=True))
+        p.drawText(QRect(cx, cy + int(14 * wvscale), cw - sc_w - 24, int(90 * wvscale)),
                    Qt.AlignLeft | Qt.AlignVCenter, "You nailed it.")
 
-        cy += sc_h + 20
+        cy += sc_h + int(20 * wvscale)
 
         # Three metric cards
-        card_h = 112
+        card_h = int(112 * wvscale)
         gap = 12
         card_w = (cw - gap * 2) // 3
         _GOLD = QColor(180, 130, 20)
@@ -2033,25 +2039,25 @@ class _GameWidget(QWidget):
             p.setBrush(Qt.NoBrush)
             p.drawRoundedRect(cx_c, cy, card_w, card_h, 8, 8)
             p.setPen(color)
-            p.setFont(_font(28, bold=True))
-            p.drawText(QRect(cx_c + 14, cy + 10, card_w - 28, 40),
+            p.setFont(_font(int(28 * max(0.75, wvscale)), bold=True))
+            p.drawText(QRect(cx_c + 14, cy + int(10 * wvscale), card_w - 28, int(40 * wvscale)),
                        Qt.AlignLeft | Qt.AlignVCenter, val)
             p.setPen(_C_INK3)
             p.setFont(_font(8, bold=False))
-            p.drawText(QRect(cx_c + 14, cy + 52, card_w - 28, 16), Qt.AlignLeft, label)
+            p.drawText(QRect(cx_c + 14, cy + int(52 * wvscale), card_w - 28, 16), Qt.AlignLeft, label)
             p.setPen(_C_INK)
             p.setFont(_font(9, bold=False))
-            p.drawText(QRect(cx_c + 14, cy + 68, card_w - 28, 36),
+            p.drawText(QRect(cx_c + 14, cy + int(68 * wvscale), card_w - 28, int(36 * wvscale)),
                        Qt.AlignLeft | Qt.TextWordWrap, desc)
 
-        cy += card_h + 16
+        cy += card_h + int(16 * wvscale)
 
         # Special commendation box (yellow)
-        comm_h = 82
+        comm_h = int(82 * wvscale)
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(_C_RISK_BG))
         p.drawRoundedRect(cx, cy, cw, comm_h, 8, 8)
-        star_r = 20
+        star_r = int(20 * wvscale)
         scx = cx + 24 + star_r
         scy = cy + comm_h // 2
         p.setPen(Qt.NoPen)
@@ -2065,57 +2071,60 @@ class _GameWidget(QWidget):
         tw = cw - (24 + star_r * 2 + 16) - 16
         p.setPen(_C_RISK_TEXT)
         p.setFont(_font(9, bold=True))
-        p.drawText(QRect(tx, cy + 10, tw, 18), Qt.AlignLeft, "Special commendation")
+        p.drawText(QRect(tx, cy + int(10 * wvscale), tw, 18), Qt.AlignLeft, "Special commendation")
         p.setPen(_C_INK)
         p.setFont(_font(9, bold=False))
-        p.drawText(QRect(tx, cy + 28, tw, 46), Qt.AlignLeft | Qt.TextWordWrap,
+        p.drawText(QRect(tx, cy + int(28 * wvscale), tw, int(46 * wvscale)), Qt.AlignLeft | Qt.TextWordWrap,
                    "You have been added to the High Performers list. This list is closely "
                    "monitored to ensure it remains long enough to look good in the annual report.")
 
-        cy += comm_h + 16
+        cy += comm_h + int(16 * wvscale)
 
         # Congratulations box (light blue)
-        cong_h = 116
+        cong_h = int(116 * wvscale)
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(QColor(228, 233, 250)))
         p.drawRoundedRect(cx, cy, cw, cong_h, 8, 8)
         p.setPen(_C_INK)
         p.setFont(_font(13, bold=False))
-        p.drawText(QRect(cx + 20, cy + 14, cw - 40, 26),
+        p.drawText(QRect(cx + 20, cy + int(14 * wvscale), cw - 40, 26),
                    Qt.AlignCenter, "Congratulations on your outstanding performance.")
         p.setPen(_C_SEL)
-        p.setFont(_font(16, bold=True))
-        p.drawText(QRect(cx + 20, cy + 42, cw - 40, 30),
+        p.setFont(_font(int(16 * max(0.8, wvscale)), bold=True))
+        p.drawText(QRect(cx + 20, cy + int(42 * wvscale), cw - 40, 30),
                    Qt.AlignCenter, "As a reward, you've unlocked... more work.")
         italic_f = _font(9, bold=False)
         italic_f.setItalic(True)
         p.setFont(italic_f)
         p.setPen(_C_INK3)
-        p.drawText(QRect(cx + 20, cy + 78, cw - 40, 22), Qt.AlignCenter,
+        p.drawText(QRect(cx + 20, cy + int(78 * wvscale), cw - 40, 22), Qt.AlignCenter,
                    "Additional responsibilities will be discussed at your current compensation level.")
 
-        cy += cong_h + 20
+        cy += cong_h + int(20 * wvscale)
 
-        # Buttons
+        # "Run another sprint" keyboard hint label (not a clickable button)
         btn_h = 44
-        btn_w = 240
-        # Filled: "Run another sprint"
+        # Draw "Press" in muted ink
+        p.setFont(_font(14, bold=False))
+        p.setPen(_C_INK2)
+        press_w = p.fontMetrics().horizontalAdvance("Press ")
+        p.drawText(cx, cy + btn_h // 2 + 5, "Press ")
+        # Draw "R" as a bold coloured key badge
+        key_sz = 28
+        key_x = cx + press_w
+        key_y = cy + (btn_h - key_sz) // 2
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(_C_SEL))
-        p.drawRoundedRect(cx, cy, btn_w, btn_h, 22, 22)
+        p.drawRoundedRect(key_x, key_y, key_sz, key_sz, 6, 6)
         p.setPen(_C_SURFACE)
-        p.setFont(_font(12, bold=True))
-        p.drawText(QRect(cx, cy, btn_w, btn_h), Qt.AlignCenter, "R  —  Run another sprint  ↗")
-        # Outline: "Review my metrics"
-        p.setPen(QPen(_C_SEL, 2))
-        p.setBrush(Qt.NoBrush)
-        p.drawRoundedRect(cx + btn_w + 12, cy, btn_w, btn_h, 22, 22)
+        p.setFont(_font(13, bold=True))
+        p.drawText(QRect(key_x, key_y, key_sz, key_sz), Qt.AlignCenter, "R")
+        # Draw "to run another sprint" in bold brand colour
+        p.setFont(_font(14, bold=True))
         p.setPen(_C_SEL)
-        p.setFont(_font(12, bold=False))
-        p.drawText(QRect(cx + btn_w + 12, cy, btn_w, btn_h), Qt.AlignCenter,
-                   "Review my metrics  ↗")
+        after_x = key_x + key_sz + 8
+        p.drawText(after_x, cy + btn_h // 2 + 5, "to run another sprint")
         # "signed, The Algorithm"
-        p.setPen(_C_INK3)
         italic_f2 = _font(10, bold=False)
         italic_f2.setItalic(True)
         p.setFont(italic_f2)
