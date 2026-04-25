@@ -93,6 +93,20 @@ Tested on macOS and Windows.
 
 ---
 
+## Building & Releasing
+
+Releases are built automatically for both platforms via a GitHub Actions workflow that runs [PyInstaller](https://pyinstaller.org).
+
+To publish a new build:
+
+1. Go to the **Releases** tab on GitHub and create a new release (or push a new tag).
+2. GitHub Actions picks it up and runs PyInstaller on both a Windows and a macOS runner.
+3. The resulting `.exe` (Windows) and `.app` bundle inside a `.zip` (macOS) are automatically attached to the release as downloadable assets.
+
+No manual build steps required - tagging a release is all it takes.
+
+---
+
 ## License
 
 MIT
