@@ -28,6 +28,18 @@ Three escalating levels. Three increasingly unhinged environments. One HR verdic
 | 2 | Gmail Inbox | Faster bounce + dripping emails |
 | 3 | Google Slides | Chaotic stochastic movement |
 
+**Level 1 — Google Sheets**
+
+<video src="assets/demos/First%20Level.mp4" autoplay loop muted playsinline></video>
+
+**Level 2 — Gmail Inbox**
+
+<video src="assets/demos/Second%20Level.mp4" autoplay loop muted playsinline></video>
+
+**Level 3 — Google Slides**
+
+<video src="assets/demos/Thirrd%20Level.mp4" autoplay loop muted playsinline></video>
+
 <!-- SCREENSHOT: Game Over / "YOU'RE FIRED" screen -->
 <!-- Insert screenshot here: assets/screenshots/game_over.png -->
 
@@ -40,7 +52,6 @@ Three escalating levels. Three increasingly unhinged environments. One HR verdic
 - **Danger vignette** — a red edge glow that intensifies the longer you look away
 - **Bonus quiz** — pop-up asks you to type corporate buzzwords mid-game for extra points
 - **HR verdict** on game over, scaled to your score
-- **Mouse mode** for testing without a webcam
 - **Calibration** — press `C` to set your current head pose as screen center
 
 ---
@@ -51,109 +62,26 @@ Three escalating levels. Three increasingly unhinged environments. One HR verdic
 - A connected webcam
 - [`uv`](https://github.com/astral-sh/uv) (fast Python package manager)
 
-Tested on macOS. Should work on Windows/Linux with minor dependency adjustments.
+Tested on macOS and Windows.
 
 ---
 
 ## Installation
 
-```bash
-git clone https://github.com/OhadGriner/eye_tracking_poc.git
-cd eye_tracking_poc
+### Windows
 
-uv sync                        # installs dependencies into .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
-```
+1. Go to the [Releases](https://github.com/OhadGriner/eye_tracking_poc/releases) page.
+2. Download the `.exe` file from the latest release.
+3. Run it — no installation required.
 
+### macOS
+
+1. Go to the [Releases](https://github.com/OhadGriner/eye_tracking_poc/releases) page.
+2. Download the `.zip` file from the latest release.
+3. Extract the zip to get the `.app` bundle.
+4. Move the `.app` to your Applications folder (optional).
+5. On first launch, macOS may block it — go to **System Settings → Privacy & Security** and click **Open Anyway**.
 ---
-
-## Running
-
-### Game
-
-```bash
-python main.py
-```
-
-> To test without a camera, open `main.py` and swap `MediaPipeGazeProvider` for `MouseGazeProvider` (see the comment in that file).
-
-### Standalone Gaze Debug Tool
-
-```bash
-python MonitorTracking.py
-```
-
-Opens two OpenCV windows showing facial landmark detection and moves your system mouse based on head pose. Useful for verifying your webcam setup and tuning calibration.
-
-<!-- SCREENSHOT: MonitorTracking.py OpenCV windows showing facial landmarks overlaid on the webcam feed -->
-<!-- Insert screenshot here: assets/screenshots/debug_tool.png -->
-
----
-
-## Controls
-
-| Key | Action |
-|-----|--------|
-| `C` | Calibrate — sets current head pose as screen center |
-| `Esc` | Quit |
-| `R` | Restart (on game over screen) |
-
----
-
-## Scoring & Progression
-
-You score **1 point per second** your gaze is within the target radius.
-
-| Milestone | Event |
-|-----------|-------|
-| Score ≥ 100 | Advance to Level 2 |
-| Score ≥ 200 | Advance to Level 3 |
-| 3s off-target | Game over |
-
-**Bonus phrases** appear periodically — type the displayed corporate buzzword exactly to earn +30 points each.
-
-### HR Verdicts
-
-| Score | Verdict |
-|-------|---------|
-| < 5 | Terminated |
-| 5 – 19 | Needs Improvement |
-| 20 – 59 | Meets Expectations |
-| ≥ 60 | Peak Performer |
-
----
-
-## Architecture
-
-```
-GazeProvider  →  GameEngine  →  GameRenderer
-(webcam/mouse)   (logic/state)   (PyQt5 UI)
-```
-
-```
-eye_tracking_poc/
-├── main.py                        # Entry point
-├── MonitorTracking.py             # Standalone gaze debug tool
-├── game/
-│   ├── config.py                  # Constants (radius, timing, asset paths)
-│   ├── gaze_providers/
-│   │   ├── base.py                # GazeProvider ABC
-│   │   ├── mediapipe_gaze.py      # Head pose via MediaPipe (daemon thread)
-│   │   └── mouse_gaze.py          # Mouse fallback for testing
-│   ├── engine/
-│   │   ├── state.py               # GameState / Target dataclasses
-│   │   └── engine.py              # Game loop, level logic, scoring
-│   └── renderer/
-│       ├── base.py                # GameRenderer ABC
-│       └── pyqt_renderer.py       # Fullscreen PyQt5 UI (all screens + HUD)
-└── assets/
-    ├── target.png
-    ├── slide.png
-    ├── gmail_logo.webp
-    ├── bonus/
-    └── *.mp3                      # Music, countdown, level stingers, alerts
-```
-
 ### How gaze tracking works
 
 1. MediaPipe FaceMesh detects 468 3D facial landmarks each frame.
@@ -161,20 +89,6 @@ eye_tracking_poc/
 3. Yaw and pitch angles are extracted and smoothed over 16 frames to reduce jitter.
 4. Angles are mapped linearly to screen coordinates (±35° yaw / ±18° pitch spans the full display).
 5. Press `C` to set the current pose as the "looking straight ahead" reference.
-
----
-
-## Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `mediapipe` | Face mesh & head pose detection |
-| `opencv-python` | Webcam capture & frame processing |
-| `pyqt5` | Game UI and event loop |
-| `numpy` | Numerical operations |
-| `scipy` | Scientific computing |
-| `pyautogui` | Mouse position (testing mode) |
-| `keyboard` | Global key handling |
 
 ---
 
